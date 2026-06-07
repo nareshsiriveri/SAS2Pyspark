@@ -1,0 +1,31 @@
+# --- secrets ---
+.env
+*.key
+
+# --- python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.venv/
+venv/
+
+# --- bundled JDK (portable, ~300MB) ---
+.jdk/
+
+# --- generated pipeline output ---
+output_*/
+build_*/
+gold_data/
+
+# --- Claude Code session data ---
+.claude/
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

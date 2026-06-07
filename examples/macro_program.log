@@ -1,0 +1,94 @@
+NOTE: SAS (r) Proprietary Software 9.4 (TS1M7)
+NOTE: This session is executing on the X64_10PRO platform.
+
+1    options mprint mlogic symbolgen;
+2    %summarize(regions=US EU, years=2022 2023);
+MLOGIC(SUMMARIZE):  Beginning execution.
+MLOGIC(SUMMARIZE):  Parameter REGIONS has value US EU
+MLOGIC(SUMMARIZE):  Parameter YEARS has value 2022 2023
+SYMBOLGEN:  Macro variable REGIONS resolves to US EU
+MLOGIC(SUMMARIZE):  %DO loop beginning; index variable I; start value is 1; stop value is 2.
+SYMBOLGEN:  Macro variable I resolves to 1
+SYMBOLGEN:  Macro variable REGION resolves to US
+MLOGIC(SUMMARIZE):  %DO loop beginning; index variable Y; start value is 1; stop value is 2.
+SYMBOLGEN:  Macro variable Y resolves to 1
+SYMBOLGEN:  Macro variable YEAR resolves to 2022
+MPRINT(SUMMARIZE):   data work.acct_US_2022;
+MPRINT(SUMMARIZE):   set raw.transactions;
+MPRINT(SUMMARIZE):   where region = "US" and year = 2022;
+MPRINT(SUMMARIZE):   amount_usd = amount * fx_rate;
+MPRINT(SUMMARIZE):   run;
+NOTE: The data set WORK.ACCT_US_2022 has 1287 observations and 6 variables.
+MPRINT(SUMMARIZE):   proc means data=work.acct_US_2022 noprint;
+MPRINT(SUMMARIZE):   var amount_usd;
+MPRINT(SUMMARIZE):   output out=work.sum_US_2022 (drop=_type_ _freq_) sum=total_usd;
+MPRINT(SUMMARIZE):   run;
+NOTE: The PROCEDURE MEANS used 0.02 seconds.
+MPRINT(SUMMARIZE):   data work.sum_US_2022;
+MPRINT(SUMMARIZE):   set work.sum_US_2022;
+MPRINT(SUMMARIZE):   length region $2;
+MPRINT(SUMMARIZE):   region = "US";
+MPRINT(SUMMARIZE):   year = 2022;
+MPRINT(SUMMARIZE):   run;
+SYMBOLGEN:  Macro variable Y resolves to 2
+SYMBOLGEN:  Macro variable YEAR resolves to 2023
+MPRINT(SUMMARIZE):   data work.acct_US_2023;
+MPRINT(SUMMARIZE):   set raw.transactions;
+MPRINT(SUMMARIZE):   where region = "US" and year = 2023;
+MPRINT(SUMMARIZE):   amount_usd = amount * fx_rate;
+MPRINT(SUMMARIZE):   run;
+NOTE: The data set WORK.ACCT_US_2023 has 1342 observations and 6 variables.
+MPRINT(SUMMARIZE):   proc means data=work.acct_US_2023 noprint;
+MPRINT(SUMMARIZE):   var amount_usd;
+MPRINT(SUMMARIZE):   output out=work.sum_US_2023 (drop=_type_ _freq_) sum=total_usd;
+MPRINT(SUMMARIZE):   run;
+MPRINT(SUMMARIZE):   data work.sum_US_2023;
+MPRINT(SUMMARIZE):   set work.sum_US_2023;
+MPRINT(SUMMARIZE):   length region $2;
+MPRINT(SUMMARIZE):   region = "US";
+MPRINT(SUMMARIZE):   year = 2023;
+MPRINT(SUMMARIZE):   run;
+MLOGIC(SUMMARIZE):  %DO loop index variable I; value is now 2.
+SYMBOLGEN:  Macro variable REGION resolves to EU
+SYMBOLGEN:  Macro variable Y resolves to 1
+SYMBOLGEN:  Macro variable YEAR resolves to 2022
+MPRINT(SUMMARIZE):   data work.acct_EU_2022;
+MPRINT(SUMMARIZE):   set raw.transactions;
+MPRINT(SUMMARIZE):   where region = "EU" and year = 2022;
+MPRINT(SUMMARIZE):   amount_usd = amount * fx_rate;
+MPRINT(SUMMARIZE):   run;
+NOTE: The data set WORK.ACCT_EU_2022 has 980 observations and 6 variables.
+MPRINT(SUMMARIZE):   proc means data=work.acct_EU_2022 noprint;
+MPRINT(SUMMARIZE):   var amount_usd;
+MPRINT(SUMMARIZE):   output out=work.sum_EU_2022 (drop=_type_ _freq_) sum=total_usd;
+MPRINT(SUMMARIZE):   run;
+MPRINT(SUMMARIZE):   data work.sum_EU_2022;
+MPRINT(SUMMARIZE):   set work.sum_EU_2022;
+MPRINT(SUMMARIZE):   length region $2;
+MPRINT(SUMMARIZE):   region = "EU";
+MPRINT(SUMMARIZE):   year = 2022;
+MPRINT(SUMMARIZE):   run;
+SYMBOLGEN:  Macro variable Y resolves to 2
+SYMBOLGEN:  Macro variable YEAR resolves to 2023
+MPRINT(SUMMARIZE):   data work.acct_EU_2023;
+MPRINT(SUMMARIZE):   set raw.transactions;
+MPRINT(SUMMARIZE):   where region = "EU" and year = 2023;
+MPRINT(SUMMARIZE):   amount_usd = amount * fx_rate;
+MPRINT(SUMMARIZE):   run;
+NOTE: The data set WORK.ACCT_EU_2023 has 1105 observations and 6 variables.
+MPRINT(SUMMARIZE):   proc means data=work.acct_EU_2023 noprint;
+MPRINT(SUMMARIZE):   var amount_usd;
+MPRINT(SUMMARIZE):   output out=work.sum_EU_2023 (drop=_type_ _freq_) sum=total_usd;
+MPRINT(SUMMARIZE):   run;
+MPRINT(SUMMARIZE):   data work.sum_EU_2023;
+MPRINT(SUMMARIZE):   set work.sum_EU_2023;
+MPRINT(SUMMARIZE):   length region $2;
+MPRINT(SUMMARIZE):   region = "EU";
+MPRINT(SUMMARIZE):   year = 2023;
+MPRINT(SUMMARIZE):   run;
+SYMBOLGEN:  Macro variable SETLIST resolves to  work.sum_US_2022 work.sum_US_2023 work.sum_EU_2022 work.sum_EU_2023
+MPRINT(SUMMARIZE):   data work.all_summaries;
+MPRINT(SUMMARIZE):   set work.sum_US_2022 work.sum_US_2023 work.sum_EU_2022 work.sum_EU_2023;
+MPRINT(SUMMARIZE):   run;
+NOTE: The data set WORK.ALL_SUMMARIES has 4 observations and 3 variables.
+MLOGIC(SUMMARIZE):  Ending execution.

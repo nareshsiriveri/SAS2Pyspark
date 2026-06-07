@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sas2spark"
+version = "0.1.0"
+description = "Risklab Code Assistant — translate SAS codebases to PySpark with a layered evaluation gauntlet (v2)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Proprietary" }
+authors = [{ name = "Risklab" }]
+dependencies = [
+    "networkx>=3.0",
+]
+
+[project.optional-dependencies]
+# LLM providers: OpenAI ChatGPT / GPT-5.5 (primary) + Anthropic Claude (fallback)
+llm = ["openai>=1.40", "anthropic>=0.40"]
+# Reading SAS golden datasets
+golden = ["pyreadstat>=1.2", "pandas>=2.0"]
+# Running generated PySpark and the eval gauntlet
+spark = ["pyspark>=3.5", "pandas>=2.0"]
+# Static analysis used by the static eval phase
+static = ["pyflakes>=3.0", "ruff>=0.4"]
+dev = ["pytest>=7.0"]
+all = [
+    "openai>=1.40",
+    "anthropic>=0.40",
+    "pyreadstat>=1.2",
+    "pandas>=2.0",
+    "pyspark>=3.5",
+    "pyflakes>=3.0",
+    "ruff>=0.4",
+    "pytest>=7.0",
+]
+
+[project.scripts]
+sas2spark = "sas2spark.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
