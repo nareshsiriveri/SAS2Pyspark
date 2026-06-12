@@ -12,6 +12,7 @@ Discovery maps file names to dataset keys:
 from __future__ import annotations
 
 import os
+import threading
 from typing import Any, Optional
 
 from ..models import Schema
@@ -101,6 +102,11 @@ class GoldenStore:
         self.default_library = default_library
         self._index: dict[str, str] = {}
         self._pandas_cache: dict[str, Any] = {}
+        self._io_lock = threading.Lock()  # concurrent workers share this store
+        # Spark DataFrames are cached per (session, key) so repeated gauntlet
+        # attempts and multiple consumer steps don't re-run createDataFrame.
+        self._spark_session: Any = None
+        self._spark_cache: dict[str, Any] = {}
         if root and os.path.isdir(root):
             self._discover()
 
@@ -133,16 +139,31 @@ class GoldenStore:
 
     def pandas(self, dataset_key: str):
         key = dataset_key.lower()
-        if key not in self._pandas_cache:
-            p = self._index.get(key)
-            if p is None:
-                raise KeyError(f"no golden dataset for {dataset_key!r}")
-            self._pandas_cache[key] = read_sas_dataset(p)
-        return self._pandas_cache[key]
+        with self._io_lock:
+            if key not in self._pandas_cache:
+                p = self._index.get(key)
+                if p is None:
+                    raise KeyError(f"no golden dataset for {dataset_key!r}")
+                self._pandas_cache[key] = read_sas_dataset(p)
+            return self._pandas_cache[key]
 
     def schema(self, dataset_key: str) -> Schema:
         return schema_of_dataframe(self.pandas(dataset_key))
 
+    def sample(self, dataset_key: str, rows: int = 5, max_chars: int = 1500) -> str:
+        """Render the first ``rows`` rows as a compact text table for prompts."""
+        pdf = self.pandas(dataset_key)
+        text = pdf.head(rows).to_string(index=False, max_cols=20, max_colwidth=24)
+        if len(text) > max_chars:
+            text = text[:max_chars] + "\n... (truncated)"
+        return text
+
     def spark(self, spark, dataset_key: str):
-        """Load a golden dataset as a Spark DataFrame (via pandas)."""
-        return spark.createDataFrame(self.pandas(dataset_key))
+        """Load a golden dataset as a Spark DataFrame (via pandas), cached per session."""
+        key = dataset_key.lower()
+        if spark is not self._spark_session:
+            self._spark_session = spark
+            self._spark_cache = {}
+        if key not in self._spark_cache:
+            self._spark_cache[key] = spark.createDataFrame(self.pandas(key))
+        return self._spark_cache[key]

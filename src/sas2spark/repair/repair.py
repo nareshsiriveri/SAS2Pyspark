@@ -31,10 +31,15 @@ class RepairLoop:
         step = node.step
         report: GauntletReport | None = None
 
-        # Initial translation (unless the node already carries code to re-check).
+        # Initial translation (unless the node already carries code to re-check,
+        # e.g. seeded from the incremental cache).
         if node.python_code is None:
             node.python_code = self.translator.translate(
-                step, node.input_schemas, node.output_schema
+                step,
+                node.input_schemas,
+                node.output_schema,
+                node.input_samples,
+                node.output_sample,
             )
             node.attempts = 1
             node.status = NodeStatus.TRANSLATED
@@ -62,6 +67,8 @@ class RepairLoop:
                 feedback,
                 node.input_schemas,
                 node.output_schema,
+                node.input_samples,
+                node.output_sample,
             )
             node.attempts += 1
             node.status = NodeStatus.TRANSLATED

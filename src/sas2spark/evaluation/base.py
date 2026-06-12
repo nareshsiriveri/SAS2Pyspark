@@ -7,6 +7,7 @@ and the LLM client (for the judge phase).
 """
 from __future__ import annotations
 
+import threading
 import types
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
@@ -42,19 +43,27 @@ class EvalContext:
     golden: Optional[GoldenStore] = None
     spark_factory: Optional[Callable[[], Any]] = None
     llm: Optional[LLMClient] = None
+    # Judge-phase client; defaults to ``llm``. The pipeline points this at the
+    # *other* configured provider so the judge doesn't grade its own translation.
+    judge_llm: Optional[LLMClient] = None
     _spark: Any = field(default=None, repr=False)
+    _spark_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def spark(self):
-        """Lazily create (and cache) a SparkSession via the configured factory."""
-        if self._spark is not None:
-            return self._spark
-        if self.spark_factory is not None:
-            self._spark = self.spark_factory()
-            return self._spark
-        from .spark_runtime import default_spark_session
+        """Lazily create (and cache) a SparkSession via the configured factory.
 
-        self._spark = default_spark_session()
-        return self._spark
+        Thread-safe: concurrent translation workers share one session.
+        """
+        with self._spark_lock:
+            if self._spark is not None:
+                return self._spark
+            if self.spark_factory is not None:
+                self._spark = self.spark_factory()
+                return self._spark
+            from .spark_runtime import default_spark_session
+
+            self._spark = default_spark_session()
+            return self._spark
 
     def stop(self) -> None:
         if self._spark is not None:

@@ -112,9 +112,12 @@ def compare_values(
         diags.append("no common columns to compare")
         return False, diags
 
-    # Order-insensitive: sort both by all common columns.
-    a_sorted = a[common].sort_values(by=common, kind="mergesort").reset_index(drop=True)
-    g_sorted = g[common].sort_values(by=common, kind="mergesort").reset_index(drop=True)
+    # Order-insensitive: sort both frames the same way. Stable (non-float)
+    # columns lead the sort key; float columns are rounded to the comparison
+    # tolerance for sorting only, so values that differ within tolerance can't
+    # land in different row orders and produce spurious cell mismatches.
+    a_sorted = _tolerance_sort(np, pd, a[common], common, atol)
+    g_sorted = _tolerance_sort(np, pd, g[common], common, atol)
 
     mismatches = 0
     for col in common:
@@ -142,6 +145,21 @@ def compare_values(
         diags.append(f"total cell mismatches: {mismatches}")
         return False, diags
     return True, diags
+
+
+def _tolerance_sort(np, pd, df, common: list[str], atol: float):
+    """Sort rows by non-float columns first, then by tolerance-rounded floats."""
+    is_float = {c: pd.api.types.is_float_dtype(df[c].dtype) for c in common}
+    sort_cols = [c for c in common if not is_float[c]] + [c for c in common if is_float[c]]
+
+    keys = df.copy()
+    if any(is_float.values()) and atol > 0:
+        decimals = max(0, min(12, int(round(-np.log10(atol)))))
+        for c in common:
+            if is_float[c]:
+                keys[c] = keys[c].round(decimals)
+    order = keys.sort_values(by=sort_cols, kind="mergesort").index
+    return df.loc[order].reset_index(drop=True)
 
 
 def _close(np, a: Any, b: Any, atol: float, rtol: float) -> bool:

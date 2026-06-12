@@ -60,6 +60,11 @@ class Settings:
 
     # --- Pipeline ---
     max_repair_attempts: int = 3
+    # Concurrent node translations. LLM calls are I/O-bound, so independent
+    # graph nodes are translated in parallel; Spark eval stays serialized.
+    translate_workers: int = 4
+    # Golden sample rows shown to the translator per dataset (0 disables).
+    prompt_sample_rows: int = 5
     float_tolerance: float = 1e-9
     # SAS dates are days since 1960-01-01; datetimes are seconds since then.
     sas_epoch: str = "1960-01-01"
@@ -80,6 +85,8 @@ class Settings:
             anthropic_model=_get("SAS2SPARK_ANTHROPIC_MODEL", "claude-opus-4-8"),
             target=_get("SAS2SPARK_TARGET", "pyspark"),
             max_repair_attempts=_get_int("SAS2SPARK_MAX_REPAIR_ATTEMPTS", 3),
+            translate_workers=_get_int("SAS2SPARK_TRANSLATE_WORKERS", 4),
+            prompt_sample_rows=_get_int("SAS2SPARK_PROMPT_SAMPLE_ROWS", 5),
             float_tolerance=_get_float("SAS2SPARK_FLOAT_TOLERANCE", 1e-9),
         )
 

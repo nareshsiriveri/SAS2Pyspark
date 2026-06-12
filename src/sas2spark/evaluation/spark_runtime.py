@@ -36,6 +36,11 @@ def default_spark_session(app_name: str = "sas2spark-eval"):
         .config("spark.sql.shuffle.partitions", "4")
         .config("spark.ui.enabled", "false")
         .config("spark.sql.session.timeZone", "UTC")
+        # Arrow makes createDataFrame(pandas) / toPandas() columnar instead of
+        # row-by-row through the Python worker. Spark silently falls back to the
+        # non-Arrow path if pyarrow is unavailable or a dtype is unsupported.
+        .config("spark.sql.execution.arrow.pyspark.enabled", "true")
+        .config("spark.sql.execution.arrow.pyspark.fallback.enabled", "true")
         .getOrCreate()
     )
 

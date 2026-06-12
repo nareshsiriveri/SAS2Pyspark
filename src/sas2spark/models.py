@@ -135,6 +135,11 @@ class TranslationNode:
     eval_results: list[EvalResult] = field(default_factory=list)
     input_schemas: dict[str, Schema] = field(default_factory=dict)
     output_schema: Optional[Schema] = None
+    # Rendered head-N rows of golden data, keyed like input_schemas. Shown to the
+    # translator so it sees real values (dates, formats, nulls), not just dtypes.
+    input_samples: dict[str, str] = field(default_factory=dict)
+    output_sample: Optional[str] = None
+    from_cache: bool = False
     notes: list[str] = field(default_factory=list)
 
     @property

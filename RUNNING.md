@@ -128,8 +128,10 @@ cat build/report.md
 ### Step 8 — Fix and re-run (only if needed)
 
 Address the items in `human_review.md` (tighten the prompt, or hand-edit the step in
-`build/steps/<label>.py`), then re-run Step 6. Re-translation is per-node, so passing
-steps aren't redone.
+`build/steps/<label>.py`), then re-run Step 6. Verified translations are cached under
+`build/.cache/translations.json` (keyed by step text + schemas + sample rows + model),
+so a re-run re-**evaluates** passing steps but never re-**translates** them — zero LLM
+cost for steps that still pass. Pass `--no-cache` to force fresh translations.
 
 ### Step 9 — Use the generated pipeline
 
@@ -272,7 +274,14 @@ correctness was established (static + data-equivalence and/or LLM-judge).
 | `--out <dir>` | output directory (default `build`) |
 | `--max-repair <n>` | repair attempts before a node is sent to human review |
 | `--include-unverified` | also emit modules for steps that didn't pass the gauntlet |
+| `--workers <n>` | concurrent node translations (default 4; independent graph nodes run in parallel, `1` = sequential) |
+| `--no-cache` | disable the incremental translation cache under `<out>/.cache` |
 | `--e2e` | (run only) execute the integrated pipeline end-to-end (needs Spark + golden sources) |
+
+Environment knobs: `SAS2SPARK_TRANSLATE_WORKERS` (same as `--workers`),
+`SAS2SPARK_PROMPT_SAMPLE_ROWS` (golden sample rows shown to the translator per
+dataset, default 5, `0` disables), `SAS2SPARK_MAX_REPAIR_ATTEMPTS`,
+`SAS2SPARK_FLOAT_TOLERANCE`.
 
 Exit code is `0` if all nodes passed, `1` if any need human review.
 
@@ -286,7 +295,8 @@ Exit code is `0` if all nodes passed, `1` if any need human review.
 │                         with the original SAS quoted at the top
 ├── pipeline.py          runnable runner wiring steps in dependency order
 ├── manifest.json        per-step status + eval results + the dependency graph
-└── human_review.md      steps that failed after repair (with SAS, code, failures)
+├── human_review.md      steps that failed after repair (with SAS, code, failures)
+└── .cache/              incremental translation cache (safe to delete; --no-cache skips)
 ```
 
 ### Run the generated pipeline (anywhere with Spark)
@@ -347,7 +357,15 @@ dataset keys: `work.priced.parquet` → `work.priced`, `raw/accounts.csv` → `r
 
 With golden data present, each step is verified by value-level comparison against the
 SAS output (schema, invariants, then full diff with float tolerance and SAS-missing-value
-handling). Without golden data, the LLM-as-judge phase runs instead.
+handling). Without golden data, the LLM-as-judge phase runs instead — and when a
+fallback provider is configured, the judge leads with the *other* provider so a model
+never grades its own translation.
+
+Golden data also improves translation accuracy directly: the first rows of each input
+and of the expected output are included in the translation prompt (control with
+`SAS2SPARK_PROMPT_SAMPLE_ROWS`), so the model sees real values, dates, and nulls
+rather than just column types. Eval-side Spark runs use Arrow-accelerated
+pandas↔Spark conversion automatically.
 
 ---
 

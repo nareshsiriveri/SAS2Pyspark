@@ -10,6 +10,7 @@ and the resulting frame is reused by schema, property, and diff.
 """
 from __future__ import annotations
 
+import threading
 import traceback
 from dataclasses import dataclass, field
 
@@ -44,6 +45,9 @@ class GauntletReport:
 class Gauntlet:
     def __init__(self, ctx: EvalContext):
         self.ctx = ctx
+        # Spark-backed phases share one local session; serialize them so
+        # concurrent translation workers don't interleave Spark jobs.
+        self._spark_phase_lock = threading.Lock()
 
     def run(self, step: SasStep, code: str, input_schemas: dict | None = None) -> GauntletReport:
         report = GauntletReport()
@@ -61,7 +65,8 @@ class Gauntlet:
         missing_inputs = [r.key for r in step.inputs if not (golden and golden.has(r.key))]
 
         if have_golden_out and not missing_inputs and _pyspark_available():
-            ran = self._run_spark_phases(step, code, out_key, report)
+            with self._spark_phase_lock:
+                ran = self._run_spark_phases(step, code, out_key, report)
             if ran:
                 return report
             # If execution failed, _run_spark_phases recorded a failing result.
@@ -71,11 +76,12 @@ class Gauntlet:
         # --- Phase 5: judge fallback (no golden / cannot execute) ---
         from ..llm.client import StubLLM
 
-        if self.ctx.llm is not None and not isinstance(self.ctx.llm, StubLLM):
+        judge_llm = self.ctx.judge_llm or self.ctx.llm
+        if judge_llm is not None and not isinstance(judge_llm, StubLLM):
             report.results.append(
-                evaluate_judge(step, code, self.ctx.llm, input_schemas)
+                evaluate_judge(step, code, judge_llm, input_schemas)
             )
-        elif isinstance(self.ctx.llm, StubLLM):
+        elif isinstance(judge_llm, StubLLM):
             report.results.append(
                 EvalResult(
                     phase=EvalPhase.JUDGE,

@@ -43,8 +43,12 @@ class Translator:
         step: SasStep,
         input_schemas: dict[str, Schema] | None = None,
         output_schema: Schema | None = None,
+        input_samples: dict[str, str] | None = None,
+        output_sample: str | None = None,
     ) -> str:
-        prompt = translation_prompt(step, input_schemas, output_schema)
+        prompt = translation_prompt(
+            step, input_schemas, output_schema, input_samples, output_sample
+        )
         resp = self.client.complete(SYSTEM_TRANSLATOR, prompt)
         return extract_code(resp.text)
 
@@ -55,9 +59,12 @@ class Translator:
         failure_feedback: str,
         input_schemas: dict[str, Schema] | None = None,
         output_schema: Schema | None = None,
+        input_samples: dict[str, str] | None = None,
+        output_sample: str | None = None,
     ) -> str:
         prompt = repair_prompt(
-            step, previous_code, failure_feedback, input_schemas, output_schema
+            step, previous_code, failure_feedback, input_schemas, output_schema,
+            input_samples, output_sample,
         )
         resp = self.client.complete(SYSTEM_TRANSLATOR, prompt)
         return extract_code(resp.text)

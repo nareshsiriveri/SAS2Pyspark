@@ -154,7 +154,11 @@ def render_report(project: ProjectResult) -> str:
                 + ("skip" if r.skipped else ("ok" if r.passed else "FAIL"))
                 for r in n.eval_results
             )
-            lines.append(f"- `{n.module_name}` [{n.status.value}] {ev}")
+            cached = " (cache)" if n.from_cache else ""
+            lines.append(f"- `{n.module_name}` [{n.status.value}]{cached} {ev}")
+            for note in n.notes:
+                if note.startswith("⚠"):  # e.g. unverified secondary outputs
+                    lines.append(f"  - {note}")
         lines.append("")
     return "\n".join(lines) + "\n"
 

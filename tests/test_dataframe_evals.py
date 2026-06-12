@@ -52,6 +52,14 @@ def test_float_tolerance_in_diff():
     assert evaluate_diff(actual, golden, atol=1e-9).passed
 
 
+def test_float_jitter_does_not_misalign_sort():
+    # 'amt' sorts alphabetically before 'region', so naive all-column sorting
+    # would order rows by the jittered floats and misalign the string column.
+    golden = pd.DataFrame({"amt": [1.0, 1.0], "region": ["a", "b"]})
+    actual = pd.DataFrame({"amt": [1.0 + 1e-12, 1.0 - 1e-12], "region": ["a", "b"]})
+    assert evaluate_diff(actual, golden, atol=1e-9).passed
+
+
 def test_missing_column_fails_schema():
     golden = _golden()
     actual = golden.drop(columns=["rate"])

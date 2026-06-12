@@ -70,6 +70,14 @@ class OpenAIClient:
             {"role": "user", "content": user},
         ]
         limit = max_tokens or self._settings.llm_max_output_tokens
+        resp = self._complete_with_limit(messages, limit)
+        # A length-truncated module would fail static eval with a confusing
+        # syntax error and burn a repair round — retry once with more room.
+        if _openai_finish_reason(resp.raw) == "length":
+            resp = self._complete_with_limit(messages, limit * 2)
+        return resp
+
+    def _complete_with_limit(self, messages: list[dict], limit: int) -> LLMResponse:
         temperature = self._settings.llm_temperature
 
         # Attempt with the modern parameter name, then fall back for older models.
@@ -114,6 +122,13 @@ class OpenAIClient:
         raise RuntimeError(f"OpenAI completion failed: {last_exc}")
 
 
+def _openai_finish_reason(raw: Any) -> str | None:
+    try:
+        return getattr(raw.choices[0], "finish_reason", None)
+    except (AttributeError, IndexError, TypeError):
+        return None
+
+
 class AnthropicClient:
     """Anthropic Claude client (default model ``claude-opus-4-8``).
 
@@ -146,12 +161,10 @@ class AnthropicClient:
 
     def complete(self, system: str, user: str, *, max_tokens: int | None = None) -> LLMResponse:
         limit = max_tokens or self._settings.llm_max_output_tokens
-        resp = self._client.messages.create(
-            model=self.model,
-            max_tokens=limit,
-            system=system,
-            messages=[{"role": "user", "content": user}],
-        )
+        resp = self._create(system, user, limit)
+        if getattr(resp, "stop_reason", None) == "max_tokens":
+            # Truncated module: retry once with more room (see OpenAIClient).
+            resp = self._create(system, user, limit * 2)
         text = "".join(
             getattr(b, "text", "") for b in resp.content if getattr(b, "type", None) == "text"
         )
@@ -164,6 +177,14 @@ class AnthropicClient:
                 "output_tokens": getattr(usage, "output_tokens", None),
             } if usage else {},
             raw=resp,
+        )
+
+    def _create(self, system: str, user: str, limit: int):
+        return self._client.messages.create(
+            model=self.model,
+            max_tokens=limit,
+            system=system,
+            messages=[{"role": "user", "content": user}],
         )
 
 

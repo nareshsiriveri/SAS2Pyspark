@@ -52,10 +52,39 @@ def _schema_block(label: str, schema: Schema | None) -> str:
     return f"{label}: {cols}{rc}"
 
 
+def _sample_lines(
+    step: SasStep,
+    input_samples: dict[str, str] | None,
+    output_sample: str | None,
+) -> list[str]:
+    """Render golden sample rows (when available) as prompt sections."""
+    lines: list[str] = []
+    input_samples = input_samples or {}
+    shown = [k for k in (r.key for r in step.inputs) if input_samples.get(k)]
+    if shown:
+        lines.append("")
+        lines.append("# Sample rows from the ACTUAL input data (from the SAS run):")
+        for k in shown:
+            lines.append(f"## {k}")
+            lines.append("```")
+            lines.append(input_samples[k].rstrip())
+            lines.append("```")
+    if output_sample:
+        lines.append("")
+        lines.append("# Sample rows of the EXPECTED output (golden SAS result your "
+                      "code must reproduce):")
+        lines.append("```")
+        lines.append(output_sample.rstrip())
+        lines.append("```")
+    return lines
+
+
 def translation_prompt(
     step: SasStep,
     input_schemas: dict[str, Schema] | None = None,
     output_schema: Schema | None = None,
+    input_samples: dict[str, str] | None = None,
+    output_sample: str | None = None,
 ) -> str:
     input_schemas = input_schemas or {}
     in_lines = [f"  {k} -> {_schema_block('cols', input_schemas.get(k))}" for k in
@@ -75,6 +104,7 @@ def translation_prompt(
         "",
         "# Expected output schema:",
         "  " + _schema_block("cols", output_schema),
+        *_sample_lines(step, input_samples, output_sample),
         "",
         "Return the PySpark module now.",
     ]
@@ -87,8 +117,12 @@ def repair_prompt(
     failure_feedback: str,
     input_schemas: dict[str, Schema] | None = None,
     output_schema: Schema | None = None,
+    input_samples: dict[str, str] | None = None,
+    output_sample: str | None = None,
 ) -> str:
-    base = translation_prompt(step, input_schemas, output_schema)
+    base = translation_prompt(
+        step, input_schemas, output_schema, input_samples, output_sample
+    )
     return "\n".join(
         [
             base,

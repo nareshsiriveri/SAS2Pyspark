@@ -37,7 +37,20 @@ def _settings_from_args(args) -> Settings:
         s.fallback_provider = None if args.fallback == "none" else args.fallback
     if getattr(args, "anthropic_model", None):
         s.anthropic_model = args.anthropic_model
+    if getattr(args, "workers", None) is not None:
+        s.translate_workers = args.workers
     return s
+
+
+def _build_cache(args):
+    """Translation cache under <out>/.cache (disabled by --no-cache)."""
+    if getattr(args, "no_cache", False):
+        return None
+    import os
+
+    from .orchestrate import TranslationCache
+
+    return TranslationCache(os.path.join(args.out, ".cache", "translations.json"))
 
 
 def cmd_flatten(args) -> int:
@@ -97,7 +110,7 @@ def cmd_project(args) -> int:
         print(f"golden datasets discovered: {golden.keys()}", file=sys.stderr)
 
     try:
-        pipeline = Pipeline(settings, golden=golden)
+        pipeline = Pipeline(settings, golden=golden, cache=_build_cache(args))
     except RuntimeError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -127,7 +140,7 @@ def _run_pipeline(args, *, integrate_output: bool, do_run_e2e: bool) -> int:
         print(f"golden datasets discovered: {golden.keys()}", file=sys.stderr)
 
     try:
-        pipeline = Pipeline(settings, golden=golden)
+        pipeline = Pipeline(settings, golden=golden, cache=_build_cache(args))
     except RuntimeError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -210,6 +223,10 @@ def build_parser() -> argparse.ArgumentParser:
         sp.add_argument("--max-repair", type=int, dest="max_repair", help="max repair attempts")
         sp.add_argument("--include-unverified", action="store_true",
                         help="also emit modules for nodes that didn't pass the gauntlet")
+        sp.add_argument("--workers", type=int,
+                        help="concurrent node translations (default: 4; 1 = sequential)")
+        sp.add_argument("--no-cache", action="store_true", dest="no_cache",
+                        help="disable the incremental translation cache under <out>/.cache")
 
     sp = sub.add_parser("translate", help="translate all steps to PySpark + write modules")
     add_pipeline_opts(sp)
@@ -240,6 +257,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--max-repair", type=int, dest="max_repair", help="max repair attempts")
     sp.add_argument("--include-unverified", action="store_true",
                     help="also emit modules for nodes that didn't pass the gauntlet")
+    sp.add_argument("--workers", type=int,
+                    help="concurrent node translations (default: 4; 1 = sequential)")
+    sp.add_argument("--no-cache", action="store_true", dest="no_cache",
+                    help="disable the incremental translation cache under <out>/.cache")
     sp.set_defaults(func=cmd_project)
 
     return p
