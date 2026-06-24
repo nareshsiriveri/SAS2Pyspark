@@ -21,7 +21,7 @@ from typing import Callable, Optional
 from ..config import Settings
 from ..evaluation.base import EvalContext
 from ..evaluation.gauntlet import Gauntlet
-from ..flatten import flatten
+from ..flatten import attach_macro_context, flatten, looks_like_log
 from ..golden import GoldenStore
 from ..graph import DependencyGraph, build_graph
 from ..llm import LLMClient, build_client
@@ -73,10 +73,25 @@ class Pipeline:
         self.cache = cache
         self.translator = Translator(self.llm)
 
-    def translate_program(self, source_or_log: str, default_library: str | None = None) -> PipelineResult:
+    def translate_program(
+        self,
+        source_or_log: str,
+        default_library: str | None = None,
+        macro_source: str | None = None,
+    ) -> PipelineResult:
+        """Flatten, segment, and translate one program.
+
+        ``macro_source`` is the original (parametric) ``.sas`` for the same run.
+        When supplied alongside an MPRINT log it enables dual-source macro
+        translation: steps expanded from a macro are tagged with the parametric
+        source and their data-derived substitutions, so coefficients are
+        externalized instead of hardcoded.
+        """
         default_library = default_library or self.settings.default_library
         flat = flatten(source_or_log)
         steps = segment(flat, default_library=default_library)
+        if macro_source and looks_like_log(source_or_log):
+            attach_macro_context(steps, macro_source, source_or_log)
         return self.translate_steps(steps)
 
     def translate_steps(self, steps: list) -> PipelineResult:

@@ -25,6 +25,24 @@ def _read(path: str) -> str:
         return f.read()
 
 
+def _macro_source_for(args) -> Optional[str]:
+    """Original parametric .sas for dual-source macro translation.
+
+    Uses ``--macro-src`` if given, else a sibling ``.sas`` next to a ``.log``
+    source (same basename). Returns None when neither is available.
+    """
+    import os
+
+    explicit = getattr(args, "macro_src", None)
+    if explicit:
+        return _read(explicit)
+    src = args.source
+    root, ext = os.path.splitext(src)
+    if ext.lower() == ".log" and os.path.isfile(root + ".sas"):
+        return _read(root + ".sas")
+    return None
+
+
 def _settings_from_args(args) -> Settings:
     s = Settings.from_env()
     if getattr(args, "provider", None):
@@ -39,6 +57,8 @@ def _settings_from_args(args) -> Settings:
         s.anthropic_model = args.anthropic_model
     if getattr(args, "workers", None) is not None:
         s.translate_workers = args.workers
+    if getattr(args, "reconcile_engine", None):
+        s.reconcile_engine = args.reconcile_engine
     return s
 
 
@@ -145,7 +165,8 @@ def _run_pipeline(args, *, integrate_output: bool, do_run_e2e: bool) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    result = pipeline.translate_program(_read(args.source))
+    macro_source = _macro_source_for(args)
+    result = pipeline.translate_program(_read(args.source), macro_source=macro_source)
     print(result.summary(), file=sys.stderr)
 
     if integrate_output:
@@ -211,6 +232,10 @@ def build_parser() -> argparse.ArgumentParser:
     def add_pipeline_opts(sp):
         add_common(sp)
         sp.add_argument("--out", default="build", help="output directory (default: build)")
+        sp.add_argument("--macro-src", dest="macro_src",
+                        help="original parametric .sas (with %%macro defs) for "
+                             "dual-source macro translation; auto-detected as a "
+                             "sibling .sas next to a .log source if omitted")
         sp.add_argument("--golden-dir", help="directory of .sas7bdat golden datasets")
         sp.add_argument("--provider", choices=["openai", "anthropic", "stub"],
                         help="primary LLM provider")
@@ -227,6 +252,11 @@ def build_parser() -> argparse.ArgumentParser:
                         help="concurrent node translations (default: 4; 1 = sequential)")
         sp.add_argument("--no-cache", action="store_true", dest="no_cache",
                         help="disable the incremental translation cache under <out>/.cache")
+        sp.add_argument("--reconcile-engine", dest="reconcile_engine",
+                        choices=["auto", "pandas", "spark"],
+                        help="data reconciliation engine: pandas (collect to driver), "
+                             "spark (distributed, scales to large data), or auto "
+                             "(spark above the row threshold; default)")
 
     sp = sub.add_parser("translate", help="translate all steps to PySpark + write modules")
     add_pipeline_opts(sp)
@@ -261,6 +291,9 @@ def build_parser() -> argparse.ArgumentParser:
                     help="concurrent node translations (default: 4; 1 = sequential)")
     sp.add_argument("--no-cache", action="store_true", dest="no_cache",
                     help="disable the incremental translation cache under <out>/.cache")
+    sp.add_argument("--reconcile-engine", dest="reconcile_engine",
+                    choices=["auto", "pandas", "spark"],
+                    help="data reconciliation engine: pandas, spark, or auto (default)")
     sp.set_defaults(func=cmd_project)
 
     return p

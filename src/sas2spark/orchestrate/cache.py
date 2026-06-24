@@ -24,7 +24,22 @@ from typing import Optional
 from ..models import Schema, SasStep
 
 # Bump when the prompt format changes in a way that should invalidate caches.
-PROMPT_VERSION = "2"
+PROMPT_VERSION = "3"
+
+
+def _macro_ctx_fingerprint(step: SasStep) -> Optional[dict]:
+    """Macro provenance shown to the translator, folded into the cache key.
+
+    Without this, a step cached before dual-source support would shadow the new,
+    generalized translation on re-run.
+    """
+    ctx = getattr(step, "macro_context", None)
+    if ctx is None:
+        return None
+    return {
+        "src": ctx.original_source,
+        "subs": sorted((s.macro_var, s.value) for s in ctx.substitutions),
+    }
 
 
 def fingerprint(
@@ -47,6 +62,7 @@ def fingerprint(
         "in_samples": dict(sorted(input_samples.items())),
         "out_sample": output_sample,
         "model": model,
+        "macro_ctx": _macro_ctx_fingerprint(step),
     }
     blob = json.dumps(payload, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()

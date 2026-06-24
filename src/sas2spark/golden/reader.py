@@ -159,11 +159,21 @@ class GoldenStore:
         return text
 
     def spark(self, spark, dataset_key: str):
-        """Load a golden dataset as a Spark DataFrame (via pandas), cached per session."""
+        """Load a golden dataset as a Spark DataFrame, cached per session.
+
+        ``.parquet`` is read directly into Spark (distributed, type-exact, no
+        driver-side pandas materialization) — this is what lets large-data
+        reconciliation avoid collecting golden to the driver. Other formats
+        (``.csv``/``.tsv``/``.sas7bdat``) go through pandas → ``createDataFrame``.
+        """
         key = dataset_key.lower()
         if spark is not self._spark_session:
             self._spark_session = spark
             self._spark_cache = {}
         if key not in self._spark_cache:
-            self._spark_cache[key] = spark.createDataFrame(self.pandas(key))
+            path = self._index.get(key)
+            if path and path.lower().endswith(".parquet"):
+                self._spark_cache[key] = spark.read.parquet(path)
+            else:
+                self._spark_cache[key] = spark.createDataFrame(self.pandas(key))
         return self._spark_cache[key]

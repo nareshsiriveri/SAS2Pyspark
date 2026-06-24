@@ -115,7 +115,6 @@ class Gauntlet:
         if all execution-backed phases completed (pass or fail recorded)."""
         from .spark_runtime import load_inputs_from_golden, run_transform
 
-        atol = self.ctx.settings.float_tolerance
         try:
             transform = load_transform(code, module_name=step.label)
         except (SyntaxError, TransformContractError) as exc:
@@ -134,7 +133,12 @@ class Gauntlet:
                 )
                 return False
             out_df = run_transform(transform, spark, inputs)
-            actual_pd = out_df.toPandas()
+            golden_df = self.ctx.golden.spark(spark, out_key)
+            engine = self._choose_engine(golden_df)
+            if engine == "spark":
+                self._reconcile_spark(out_df, golden_df, report)
+            else:
+                self._reconcile_pandas(out_df, out_key, report)
         except Exception:  # noqa: BLE001 - capture runtime errors as eval feedback
             tb = traceback.format_exc(limit=6)
             report.results.append(
@@ -146,22 +150,68 @@ class Gauntlet:
                 )
             )
             return False
+        return True
 
+    def _choose_engine(self, golden_df) -> str:
+        """Resolve the reconciliation engine for this step ('spark' | 'pandas')."""
+        engine = (self.ctx.settings.reconcile_engine or "auto").lower()
+        if engine in ("spark", "pandas"):
+            return engine
+        # auto: distributed only when the golden output is large enough to make a
+        # full driver collect wasteful/risky.
+        try:
+            n = golden_df.count()
+        except Exception:  # noqa: BLE001 - if counting fails, fall back to pandas
+            return "pandas"
+        return "spark" if n > self.ctx.settings.reconcile_row_threshold else "pandas"
+
+    def _reconcile_spark(self, out_df, golden_df, report) -> None:
+        """Distributed schema/property/diff — no full collect (fail-fast)."""
+        from .spark_compare import (
+            compare_properties_spark,
+            compare_schema_spark,
+            compare_values_spark,
+        )
+
+        atol = self.ctx.settings.float_tolerance
+        max_report = self.ctx.settings.reconcile_max_report
+
+        passed, diags = compare_schema_spark(out_df, golden_df)
+        report.results.append(EvalResult(
+            EvalPhase.SCHEMA, passed,
+            "schema matches golden" if passed else "schema mismatch", diags))
+        if not passed:
+            return
+
+        passed, diags = compare_properties_spark(out_df, golden_df, atol=atol)
+        report.results.append(EvalResult(
+            EvalPhase.PROPERTY, passed,
+            "invariants match golden" if passed else "property/invariant mismatch", diags))
+        if not passed:
+            return
+
+        passed, diags = compare_values_spark(
+            out_df, golden_df, atol=atol, max_report=max_report)
+        report.results.append(EvalResult(
+            EvalPhase.DIFF, passed,
+            "values match golden (within tolerance)" if passed else "value-level diff", diags))
+
+    def _reconcile_pandas(self, out_df, out_key, report) -> None:
+        """Collect both sides to the driver and compare in pandas (fail-fast)."""
+        atol = self.ctx.settings.float_tolerance
+        actual_pd = out_df.toPandas()
         golden_pd = self.ctx.golden.pandas(out_key)
 
         schema_res = evaluate_schema(actual_pd, golden_pd)
         report.results.append(schema_res)
         if not schema_res.passed:
-            return True  # fail fast within the Spark phases
-
+            return
         prop_res = evaluate_property(actual_pd, golden_pd, atol=atol)
         report.results.append(prop_res)
         if not prop_res.passed:
-            return True
-
+            return
         diff_res = evaluate_diff(actual_pd, golden_pd, atol=atol)
         report.results.append(diff_res)
-        return True
 
 
 def _pyspark_available() -> bool:

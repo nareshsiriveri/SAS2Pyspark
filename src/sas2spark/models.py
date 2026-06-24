@@ -52,6 +52,34 @@ class DatasetRef:
 
 
 @dataclass
+class MacroSubstitution:
+    """A literal in flattened code that was substituted from a SAS macro variable.
+
+    These come from MPRINT expansion: SAS replaces ``&var`` with the variable's
+    value at run time. For *data-derived* variables (e.g. model coefficients pushed
+    into macro vars via ``CALL SYMPUT``) the resulting literal is a snapshot of one
+    run, not a constant — the translation must treat it as a parameter/input.
+    """
+
+    macro_var: str
+    value: str
+
+
+@dataclass
+class MacroContext:
+    """Provenance for a step produced by macro expansion (dual-source translation).
+
+    Lets the translator see the *parametric* macro alongside the *expanded*
+    snapshot, so it generalizes (externalizes coefficients) instead of hardcoding
+    the run-specific literals MPRINT baked in.
+    """
+
+    macro_names: list[str] = field(default_factory=list)
+    original_source: str = ""  # the %macro...%mend body/bodies this step came from
+    substitutions: list[MacroSubstitution] = field(default_factory=list)
+
+
+@dataclass
 class SasStep:
     """One DATA or PROC step (already macro-flattened, concrete)."""
 
@@ -65,6 +93,9 @@ class SasStep:
     line_start: int = 0
     line_end: int = 0
     source: Optional[str] = None  # originating file (multi-file projects)
+    # Macro provenance (set only for steps expanded from a macro when the original
+    # .sas source is available alongside the MPRINT log).
+    macro_context: Optional["MacroContext"] = None
 
     @property
     def label(self) -> str:

@@ -66,6 +66,17 @@ class Settings:
     # Golden sample rows shown to the translator per dataset (0 disables).
     prompt_sample_rows: int = 5
     float_tolerance: float = 1e-9
+    # Reconciliation engine for the schema/property/diff phases:
+    #   "pandas" — collect both sides to the driver and compare in pandas (exact,
+    #              uses driver RAM; fine for small/medium data).
+    #   "spark"  — compare distributed on Spark (no full collect; scales to large
+    #              data; value diff via tolerance-rounded exceptAll).
+    #   "auto"   — pick per step: spark when the golden output exceeds
+    #              ``reconcile_row_threshold`` rows, else pandas.
+    reconcile_engine: str = "auto"
+    reconcile_row_threshold: int = 200_000
+    # Max sample mismatches reported by either reconciliation engine.
+    reconcile_max_report: int = 20
     # SAS dates are days since 1960-01-01; datetimes are seconds since then.
     sas_epoch: str = "1960-01-01"
     # Default SAS library for unqualified dataset names.
@@ -88,6 +99,9 @@ class Settings:
             translate_workers=_get_int("SAS2SPARK_TRANSLATE_WORKERS", 4),
             prompt_sample_rows=_get_int("SAS2SPARK_PROMPT_SAMPLE_ROWS", 5),
             float_tolerance=_get_float("SAS2SPARK_FLOAT_TOLERANCE", 1e-9),
+            reconcile_engine=_get("SAS2SPARK_RECONCILE_ENGINE", "auto"),
+            reconcile_row_threshold=_get_int("SAS2SPARK_RECONCILE_ROW_THRESHOLD", 200_000),
+            reconcile_max_report=_get_int("SAS2SPARK_RECONCILE_MAX_REPORT", 20),
         )
 
     def to_dict(self) -> dict[str, Any]:

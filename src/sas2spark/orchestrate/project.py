@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from ..flatten import flatten
+from ..flatten import attach_macro_context, flatten, looks_like_log
 from ..models import NodeStatus, SasStep
 from ..parse import segment
 from .pipeline import Pipeline, PipelineResult
@@ -49,6 +49,24 @@ def discover_files(inputs: list[str], order_file: str | None = None) -> list[str
     return list(inputs)
 
 
+def _sibling_macro_source(path: str) -> str | None:
+    """The original ``.sas`` next to a ``.log`` (same basename), for dual-source.
+
+    A real macro run is logged to ``01_load.log`` but the parametric ``%macro``
+    definitions live in ``01_load.sas``. When both are present we read the ``.sas``
+    so macro provenance (parametric source + data-derived substitutions) can be
+    attached to the steps harvested from the log.
+    """
+    root, ext = os.path.splitext(path)
+    if ext.lower() != ".log":
+        return None
+    sas_path = root + ".sas"
+    if not os.path.isfile(sas_path):
+        return None
+    with open(sas_path, "r", encoding="utf-8", errors="replace") as f:
+        return f.read()
+
+
 def load_project_steps(paths: list[str], default_library: str = "work") -> list[SasStep]:
     """Flatten+segment each file, tag with source, renumber into one sequence."""
     steps: list[SasStep] = []
@@ -56,6 +74,9 @@ def load_project_steps(paths: list[str], default_library: str = "work") -> list[
         with open(path, "r", encoding="utf-8", errors="replace") as f:
             text = f.read()
         file_steps = segment(flatten(text), default_library=default_library)
+        macro_source = _sibling_macro_source(path)
+        if macro_source and looks_like_log(text):
+            attach_macro_context(file_steps, macro_source, text)
         src = os.path.basename(path)
         for s in file_steps:
             s.source = src

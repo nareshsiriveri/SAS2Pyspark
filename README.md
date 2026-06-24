@@ -52,6 +52,17 @@ is obvious:
 01_load.log, 02_clean.log, ..., 20_report.log
 ```
 
+> **Keep the original `.sas` next to each `.log`** (same basename, e.g.
+> `01_load.sas` beside `01_load.log`). For macro-heavy code this enables
+> **dual-source translation**: the tool pairs the parametric `%macro` source with
+> the MPRINT expansion so it can tell *structural* macro variables (loop indices,
+> `%scan`'d lists — correctly baked in) apart from *data-derived* ones (e.g. model
+> coefficients pushed in via `CALL SYMPUT`). The latter are flagged to the
+> translator as **parameters to externalize**, not constants to hardcode — so a
+> scoring step becomes a reusable `COEFFICIENTS = {...}` mapping instead of a
+> one-run snapshot. Single-file runs auto-detect the sibling `.sas`, or pass it
+> explicitly with `--macro-src path/to/original.sas`.
+
 ### 1.3 Export the golden datasets
 
 These are the per-step output tables SAS wrote during that same run — they are what
@@ -282,3 +293,92 @@ sas2spark project examples/project --provider stub --out /tmp/smoke   # offline 
 | `src/sas2spark/repair/`  | feedback-driven re-translation |
 | `src/sas2spark/orchestrate/` | per-node loop, parallel scheduler, cache, integrator, HITL |
 | `src/sas2spark/cli.py`   | the `sas2spark` command |
+
+
+
+Here's what each component on the diagram is, mapped to the actual code in your project. I also note how it relates to the original IMG_6163.jpg design (which was the v1 "Alphacodium" concept — your repo is the v2 redesign that deliberately removed the SAS-instrumentation layer).
+
+How v2 differs from the image
+The image shows three SAS-side boxes — SAS Code Scanner, SAS Code Instrumentation, SAS Runtime Instrumentation. DESIGN_SAS2Python_v2.md explicitly deletes all three: line-by-line SAS instrumentation was brittle, so v2 captures data at natural DATA/PROC boundaries from one normal SAS run instead. The Translator → Syntax Checker → Semantic Analyzer loop and Human in the loop, Checkpoint cache, and LangGraph container from the image survive — they're the dashed box in my diagram.
+
+Top band — decomposition (blue, no LLM, no cost)
+Inputs — two artifacts from one ordinary SAS run: the MPRINT .log and the golden datasets (.sas7bdat/.parquet/.csv). Loaded by golden/reader.py (GoldenStore). This replaces the image's "Model Inputs".
+Macro flattener (flatten/macro_flattener.py) — harvests the expanded code from MPRINT(...) log lines so every %macro/%do/&var is already resolved. Raw SAS with no macros passes through unchanged. This is v2's replacement for the image's SAS Runtime Instrumentation.
+Segmenter + I/O extract (parse/segmenter.py, parse/io_extract.py) — a lightweight partial parser (not a full grammar): strips comments, splits on data/proc … run;/quit;, and pulls each step's inputs (set/merge/from) and outputs (data X/create table X/out=). Replaces the image's SAS Code Scanner.
+Dependency grapher (graph/depgraph.py) — builds a DAG (last-writer-wins on dataset names), topo-sorts it, and groups nodes into layers so independent steps translate in parallel. Datasets read but never written become EXTERNAL_INPUTS.
+The per-node loop (the dashed "LangGraph" container)
+Driven by orchestrate/pipeline.py, which sweeps the DAG and runs independent nodes concurrently (_run_dependency_parallel, translate_workers threads).
+
+Translator (purple, translate/translator.py) — prompts the LLM with the single SAS step + input/output schemas + golden sample rows (llm/prompts.py) and extracts the transform(spark, inputs) code block. This is the image's Translator agent.
+LLM client (gray, llm/client.py) — provider-agnostic: OpenAI gpt-5.5 default, Anthropic Claude fallback, offline stub. This is the image's LLM.
+Cache (gray, orchestrate/cache.py) — fingerprints each step (SAS text + schemas + model + prompt version); on a hit it seeds verified code into the node so re-runs re-evaluate but never re-translate. This is the image's Checkpoint cache.
+Eval gauntlet (teal, evaluation/gauntlet.py) — cheapest-first, fail-fast. This merges the image's Python Code Syntax Checker (phase 1) and Semantic Analyzer (phases 2–5):
+static (static_eval.py) — compiles, lint, transform-contract check, no SparkSession.builder.
+schema, 3. property/invariants, 4. data-equivalence value diff (dataframe_evals.py + compare.py) — the step is executed once on Spark (spark_runtime.py) and compared value-for-value to golden, with SAS-aware float tolerance / missing-value / date-epoch handling.
+judge (judge_eval.py) — LLM-as-judge fallback when no golden data exists (uses the other provider to avoid self-grading correlation).
+pass? → commit (green) — a passing node is stored and cached.
+Repair loop (amber, repair/repair.py) — on failure, feeds the exact traceback/schema-diff/value-diff/critique back to the translator and re-translates, up to --max-repair (default 3). This is the image's "decision → No → back" arrow.
+Human review (coral, orchestrate/hitl.py) — only nodes still failing after N attempts are surfaced, with SAS source + generated PySpark + the failing eval. This is the image's Human in the loop.
+Bottom band — integration & outputs (green)
+Integrator (orchestrate/integrator.py) — writes each committed step to steps/<label>.py and generates pipeline.py, threading each step's output DataFrame into its consumers in topological order.
+Outputs: pipeline.py (the runnable, tool-free PySpark pipeline), report.md (per-file/per-step verdict), manifest.json (machine-readable status + evals + graph), human_review.md (only failing steps).
+Two supporting modules don't appear as flow boxes but wrap everything: orchestrate/project.py (multi-file codebases → one cross-file graph) and cli.py (flatten/segment/graph/translate/run/project commands, the entry points), configured via config.py.
+
+Want me to also render this as a standalone file (e.g. an SVG/PNG saved to the repo, or a Mermaid block in the README/DESIGN doc) so it lives alongside the code?
+
+thanks , can you please integrate this to a new pptx
+
+I'll create a new PowerPoint deck with the architecture diagram and component breakdown. Let me load the pptx skill.
+
+Ran skill
+/anthropic-skills:pptx
+Let me check the existing deck-build setup in the repo and read the pptxgenjs guide.
+
+
+Read 2 files
+The repo already has a build_deck.js (the v2 design narrative). I'll create a new, separate deck focused on the architecture/flow diagram and the real component-to-file mapping I just produced. Let me write the build script.
+
+
+Created a file, ran a command
+pptxgenjs isn't installed. Let me locate or install it.
+
+Ran
+Check global pptxgenjs install
+pptxgenjs is installed globally. Let me point Node at the global modules.
+
+Ran
+Build deck using global node_modules
+Deck built. Now let me render it to images and QA visually — the diagram slide especially needs checking.
+
+
+Ran a command, used a tool
+No LibreOffice available to rasterize, so I'll do content QA via text extraction and review the diagram coordinates carefully by hand. Let me extract text first.
+
+
+Ran 2 commands
+I have python-pptx. Let me programmatically dump every shape's bounding box and text per slide, then detect overlaps on the diagram slide.
+
+
+Ran 2 commands
+The dump reveals two real defects on the diagram slide: the exit arrow (x=11.3) runs straight down through the Repair box, and the tiny loop boxes stack subtitle + filepath too tightly. Let me fix both.
+
+
+Edited a file, ran a command
+Let me verify the fixes landed on the diagram slide.
+
+Ran
+Verify diagram slide fixes
+Done. The new deck is at SAS2Python_Architecture.pptx (7 slides, 13.3×7.5 widescreen), generated by build_arch_deck.js — a separate script from the repo's existing build_deck.js, so both decks coexist.
+
+Slides:
+
+Title — sas2spark, SAS → PySpark, one-paragraph overview
+Architecture & data flow — the full diagram rebuilt as native, editable PowerPoint shapes: the blue decomposition band, the dashed orchestrate/pipeline.py per-node loop (Translator → Eval gauntlet → pass? → Commit, with the Repair feedback elbow and Human-review branch), and the exit to the integrator — every box labeled with its source file
+Stage A · decomposition — Inputs, Macro flattener, Segmenter+I/O, Dependency grapher, each with file path and description
+Stage B · per-node loop — Translator, LLM client, Cache, Eval gauntlet, Repair loop, Human-in-the-loop
+Eval gauntlet — the 5 phases as a fail-fast staircase (static_eval.py → judge_eval.py) with cost tags
+Stage C · integration — Integrator + the four outputs (pipeline.py, report.md, manifest.json, human_review.md) + the run command
+v1 → v2 mapping — a table mapping each box from your IMG_6163.jpg to where it lives (or why it was removed) in this codebase
+On QA: LibreOffice isn't installed on this machine, so I couldn't auto-rasterize the slides for a fresh-eyes visual pass. Instead I dumped every shape's bounding box with python-pptx and fixed two real defects I found on the diagram slide — the integrator exit arrow was slicing through the Repair box (now routed down the right edge), and the small loop boxes had subtitle/filepath lines overlapping (filepaths removed there since slides 3–4 carry them). The file opens cleanly.
+
+If you'd like, I can install LibreOffice and render PNGs so you (and a subagent) get a true visual proof, or tweak the palette/branding to match an existing corporate template.

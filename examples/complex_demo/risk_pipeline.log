@@ -1,0 +1,113 @@
+NOTE: SAS (r) Proprietary Software 9.4 (TS1M7)
+NOTE: This session is executing on the X64_10PRO platform.
+
+1    options mprint mlogic symbolgen;
+2    data _null_;
+3       set model.params;
+4       call symput(strip(varname), strip(put(estimate, best16.)));
+5    run;
+NOTE: There were 5 observations read from the data set MODEL.PARAMS.
+6    %let var_list = INTERCEPT TENURE BALANCE NUMTX CCI;
+7    %let n_var    = 5;
+8    %score_book(segs=RETAIL SME, months=1 2);
+MLOGIC(SCORE_BOOK):  Beginning execution.
+MLOGIC(SCORE_BOOK):  Parameter SEGS has value RETAIL SME
+MLOGIC(SCORE_BOOK):  Parameter MONTHS has value 1 2
+MLOGIC(SCORE_BOOK):  %DO loop beginning; index variable I; start value is 1; stop value is 2.
+SYMBOLGEN:  Macro variable I resolves to 1
+SYMBOLGEN:  Macro variable S resolves to RETAIL
+MLOGIC(SCORE_BOOK):  %DO loop beginning; index variable J; start value is 1; stop value is 2.
+SYMBOLGEN:  Macro variable J resolves to 1
+SYMBOLGEN:  Macro variable M resolves to 1
+MPRINT(SCORE_BOOK):   data work.cust_RETAIL_1;
+MPRINT(SCORE_BOOK):   set raw.customers;
+MPRINT(SCORE_BOOK):   where segment = "RETAIL" and month = 1;
+MPRINT(SCORE_BOOK):   tenure_yrs = tenure / 12;
+MPRINT(SCORE_BOOK):   run;
+NOTE: The data set WORK.CUST_RETAIL_1 has 2143 observations and 8 variables.
+MLOGIC(SCORE_BOOK):  %DO loop beginning; index variable K; start value is 1; stop value is 5.
+SYMBOLGEN:  Macro variable K resolves to 1
+SYMBOLGEN:  Macro variable VAR_LIST resolves to INTERCEPT TENURE BALANCE NUMTX CCI
+SYMBOLGEN:  Macro variable V resolves to INTERCEPT
+SYMBOLGEN:  Macro variable INTERCEPT resolves to -2.5
+SYMBOLGEN:  Macro variable K resolves to 2
+SYMBOLGEN:  Macro variable V resolves to TENURE
+SYMBOLGEN:  Macro variable TENURE resolves to 0.0123
+SYMBOLGEN:  Macro variable K resolves to 3
+SYMBOLGEN:  Macro variable V resolves to BALANCE
+SYMBOLGEN:  Macro variable BALANCE resolves to 0.00004
+SYMBOLGEN:  Macro variable K resolves to 4
+SYMBOLGEN:  Macro variable V resolves to NUMTX
+SYMBOLGEN:  Macro variable NUMTX resolves to 0.18
+SYMBOLGEN:  Macro variable K resolves to 5
+SYMBOLGEN:  Macro variable V resolves to CCI
+SYMBOLGEN:  Macro variable CCI resolves to 0.0075
+MPRINT(SCORE_BOOK):   data work.scored_RETAIL_1;
+MPRINT(SCORE_BOOK):   set work.cust_RETAIL_1;
+MPRINT(SCORE_BOOK):   risk_score = 0 + -2.5*INTERCEPT + 0.0123*TENURE + 0.00004*BALANCE + 0.18*NUMTX + 0.0075*CCI ;
+MPRINT(SCORE_BOOK):   length segment $8;
+MPRINT(SCORE_BOOK):   segment = "RETAIL";
+MPRINT(SCORE_BOOK):   month = 1;
+MPRINT(SCORE_BOOK):   run;
+NOTE: The data set WORK.SCORED_RETAIL_1 has 2143 observations and 11 variables.
+SYMBOLGEN:  Macro variable J resolves to 2
+SYMBOLGEN:  Macro variable M resolves to 2
+MPRINT(SCORE_BOOK):   data work.cust_RETAIL_2;
+MPRINT(SCORE_BOOK):   set raw.customers;
+MPRINT(SCORE_BOOK):   where segment = "RETAIL" and month = 2;
+MPRINT(SCORE_BOOK):   tenure_yrs = tenure / 12;
+MPRINT(SCORE_BOOK):   run;
+NOTE: The data set WORK.CUST_RETAIL_2 has 2098 observations and 8 variables.
+MPRINT(SCORE_BOOK):   data work.scored_RETAIL_2;
+MPRINT(SCORE_BOOK):   set work.cust_RETAIL_2;
+MPRINT(SCORE_BOOK):   risk_score = 0 + -2.5*INTERCEPT + 0.0123*TENURE + 0.00004*BALANCE + 0.18*NUMTX + 0.0075*CCI ;
+MPRINT(SCORE_BOOK):   length segment $8;
+MPRINT(SCORE_BOOK):   segment = "RETAIL";
+MPRINT(SCORE_BOOK):   month = 2;
+MPRINT(SCORE_BOOK):   run;
+NOTE: The data set WORK.SCORED_RETAIL_2 has 2098 observations and 11 variables.
+MLOGIC(SCORE_BOOK):  %DO loop index variable I; value is now 2.
+SYMBOLGEN:  Macro variable I resolves to 2
+SYMBOLGEN:  Macro variable S resolves to SME
+SYMBOLGEN:  Macro variable J resolves to 1
+SYMBOLGEN:  Macro variable M resolves to 1
+MPRINT(SCORE_BOOK):   data work.cust_SME_1;
+MPRINT(SCORE_BOOK):   set raw.customers;
+MPRINT(SCORE_BOOK):   where segment = "SME" and month = 1;
+MPRINT(SCORE_BOOK):   tenure_yrs = tenure / 12;
+MPRINT(SCORE_BOOK):   run;
+NOTE: The data set WORK.CUST_SME_1 has 1502 observations and 8 variables.
+MPRINT(SCORE_BOOK):   data work.scored_SME_1;
+MPRINT(SCORE_BOOK):   set work.cust_SME_1;
+MPRINT(SCORE_BOOK):   risk_score = 0 + -2.5*INTERCEPT + 0.0123*TENURE + 0.00004*BALANCE + 0.18*NUMTX + 0.0075*CCI ;
+MPRINT(SCORE_BOOK):   length segment $8;
+MPRINT(SCORE_BOOK):   segment = "SME";
+MPRINT(SCORE_BOOK):   month = 1;
+MPRINT(SCORE_BOOK):   run;
+NOTE: The data set WORK.SCORED_SME_1 has 1502 observations and 11 variables.
+SYMBOLGEN:  Macro variable J resolves to 2
+SYMBOLGEN:  Macro variable M resolves to 2
+MPRINT(SCORE_BOOK):   data work.cust_SME_2;
+MPRINT(SCORE_BOOK):   set raw.customers;
+MPRINT(SCORE_BOOK):   where segment = "SME" and month = 2;
+MPRINT(SCORE_BOOK):   tenure_yrs = tenure / 12;
+MPRINT(SCORE_BOOK):   run;
+NOTE: The data set WORK.CUST_SME_2 has 1467 observations and 8 variables.
+MPRINT(SCORE_BOOK):   data work.scored_SME_2;
+MPRINT(SCORE_BOOK):   set work.cust_SME_2;
+MPRINT(SCORE_BOOK):   risk_score = 0 + -2.5*INTERCEPT + 0.0123*TENURE + 0.00004*BALANCE + 0.18*NUMTX + 0.0075*CCI ;
+MPRINT(SCORE_BOOK):   length segment $8;
+MPRINT(SCORE_BOOK):   segment = "SME";
+MPRINT(SCORE_BOOK):   month = 2;
+MPRINT(SCORE_BOOK):   run;
+NOTE: The data set WORK.SCORED_SME_2 has 1467 observations and 11 variables.
+SYMBOLGEN:  Macro variable SETLIST resolves to  work.scored_RETAIL_1 work.scored_RETAIL_2 work.scored_SME_1 work.scored_SME_2
+MPRINT(SCORE_BOOK):   data work.scored_all;
+MPRINT(SCORE_BOOK):   set work.scored_RETAIL_1 work.scored_RETAIL_2 work.scored_SME_1 work.scored_SME_2;
+MPRINT(SCORE_BOOK):   run;
+NOTE: The data set WORK.SCORED_ALL has 7210 observations and 11 variables.
+MPRINT(SCORE_BOOK):   proc sql;
+MPRINT(SCORE_BOOK):   create table work.risk_share as select segment, month, custid, risk_score, risk_score / sum(risk_score) as risk_pct, mean(risk_score) as seg_avg_score from work.scored_all group by segment, month;
+MPRINT(SCORE_BOOK):   quit;
+NOTE: Table WORK.RISK_SHARE created, with 7210 rows and 6 columns.
+MLOGIC(SCORE_BOOK):  Ending execution.

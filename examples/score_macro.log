@@ -1,0 +1,33 @@
+NOTE: SAS (r) Proprietary Software 9.4 (TS1M7)
+1    options mprint mlogic symbolgen;
+2    %score(snapshot=x_oo_res, score_name=score, n_var=5,
+3           var_list=INTERCEPT BIGCITY SEGMENT YEARS CCI);
+MLOGIC(SCORE):  Beginning execution.
+MLOGIC(SCORE):  Parameter SNAPSHOT has value x_oo_res
+MLOGIC(SCORE):  Parameter SCORE_NAME has value score
+MLOGIC(SCORE):  Parameter N_VAR has value 5
+MLOGIC(SCORE):  Parameter VAR_LIST has value INTERCEPT BIGCITY SEGMENT YEARS CCI
+SYMBOLGEN:  Macro variable SNAPSHOT resolves to x_oo_res
+MPRINT(SCORE):   data x_oo_res;
+MPRINT(SCORE):   set x_oo_res;
+MLOGIC(SCORE):  %DO loop beginning; index variable I; start value is 1; stop value is 5.
+SYMBOLGEN:  Macro variable I resolves to 1
+SYMBOLGEN:  Macro variable VAR_LIST resolves to INTERCEPT BIGCITY SEGMENT YEARS CCI
+SYMBOLGEN:  Macro variable VAR_NAME resolves to INTERCEPT
+SYMBOLGEN:  Macro variable INTERCEPT resolves to -0.00637
+SYMBOLGEN:  Macro variable I resolves to 2
+SYMBOLGEN:  Macro variable VAR_NAME resolves to BIGCITY
+SYMBOLGEN:  Macro variable BIGCITY resolves to 0
+SYMBOLGEN:  Macro variable I resolves to 3
+SYMBOLGEN:  Macro variable VAR_NAME resolves to SEGMENT
+SYMBOLGEN:  Macro variable SEGMENT resolves to 0
+SYMBOLGEN:  Macro variable I resolves to 4
+SYMBOLGEN:  Macro variable VAR_NAME resolves to YEARS
+SYMBOLGEN:  Macro variable YEARS resolves to -0.1062
+SYMBOLGEN:  Macro variable I resolves to 5
+SYMBOLGEN:  Macro variable VAR_NAME resolves to CCI
+SYMBOLGEN:  Macro variable CCI resolves to 0.2762
+MPRINT(SCORE):   score=0 + -0.00637*INTERCEPT + 0*BIGCITY + 0*SEGMENT + -0.1062*YEARS + 0.2762*CCI;
+MPRINT(SCORE):   run;
+NOTE: The data set WORK.X_OO_RES has 10000 observations and 7 variables.
+MLOGIC(SCORE):  Ending execution.

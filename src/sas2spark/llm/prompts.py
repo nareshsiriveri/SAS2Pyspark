@@ -5,7 +5,9 @@ This keeps each LLM call cheap, reliable, and locally debuggable.
 """
 from __future__ import annotations
 
-from ..models import SasStep, Schema
+import re
+
+from ..models import SasStep, Schema, StepKind
 
 TARGET_CONTRACT = '''\
 Target: PySpark (Spark DataFrame API and/or Spark SQL via spark.sql).
@@ -79,6 +81,87 @@ def _sample_lines(
     return lines
 
 
+_GROUP_BY_RE = re.compile(r"\bgroup\s+by\b", re.IGNORECASE)
+
+
+def _is_proc_sql(step: SasStep) -> bool:
+    if step.kind is StepKind.PROC and (step.proc_name or "").lower() == "sql":
+        return True
+    # Macro-flattened OTHER blocks may still contain a PROC SQL body.
+    return bool(re.search(r"\bproc\s+sql\b", step.text, re.IGNORECASE))
+
+
+def _proc_sql_lines(step: SasStep) -> list[str]:
+    """SAS PROC SQL semantics that differ from Spark SQL — injected per step.
+
+    The big one is GROUP BY *remerging*: SAS keeps detail rows and merges the
+    group aggregate back onto each, where Spark would collapse to one row per
+    group. That maps to a window function, not groupBy — and getting it wrong
+    silently drops rows.
+    """
+    if not _is_proc_sql(step):
+        return []
+    lines = [
+        "",
+        "# SAS PROC SQL — translate the INTENT; SAS SQL is not Spark SQL:",
+        "# - Register each input as a temp view and use `spark.sql(...)`, or use the",
+        "#   DataFrame API. Identifiers are case-insensitive in SAS.",
+        "# - Aggregates ignore NULLs; `count(*)` counts rows but `count(col)` and",
+        "#   `count(distinct col)` ignore NULLs — preserve the exact variant.",
+    ]
+    if _GROUP_BY_RE.search(step.text):
+        lines += [
+            "# - ⚠ GROUP BY REMERGING (critical, differs from Spark): if the SELECT",
+            "#   lists a column that is NOT in GROUP BY *alongside* an aggregate",
+            "#   (e.g. `select dept, salary, salary/sum(salary) as pct ... group by dept`),",
+            "#   SAS does NOT collapse to one row per group — it KEEPS EVERY detail row",
+            "#   and remerges the group aggregate onto each. Translate that with a",
+            "#   WINDOW function: `F.sum(x).over(Window.partitionBy(<group keys>))`,",
+            "#   NOT groupBy/agg (which drops rows). Use groupBy ONLY when the SELECT",
+            "#   is purely group keys + aggregates (a genuine one-row-per-group summary).",
+            "# - ⚠ ORDERING: SAS GROUP BY returns rows ORDERED by the group keys; Spark",
+            "#   does not. Add an explicit `.orderBy(<group keys>)` if output order",
+            "#   matters. HAVING filters on the aggregate (per group, after remerge).",
+        ]
+    return lines
+
+
+def _macro_context_lines(step: SasStep) -> list[str]:
+    """Render dual-source macro provenance so the model generalizes the snapshot."""
+    ctx = getattr(step, "macro_context", None)
+    if ctx is None:
+        return []
+    lines = [
+        "",
+        "# ⚠ MACRO EXPANSION — the SAS step above is a SNAPSHOT of ONE run.",
+        "# It was produced by MPRINT-expanding a SAS macro, so values that were",
+        "# macro variables are now baked in as literals. Translate the GENERAL",
+        "# logic from the parametric source below, NOT the snapshot's literals.",
+    ]
+    if ctx.original_source:
+        lines += [
+            "## Original parametric macro source:",
+            "```sas",
+            ctx.original_source.strip(),
+            "```",
+        ]
+    if ctx.substitutions:
+        lines += [
+            "## Data-derived substitutions (NOT constants — externalize these):",
+            "# Each literal below was substituted from a macro variable that came",
+            "# from data (e.g. model coefficients via CALL SYMPUT). Do NOT scatter",
+            "# them as inline literals. Lift them into a single, clearly-named",
+            "# parameter mapping at the top of the module (e.g.",
+            "# `COEFFICIENTS = {\"INTERCEPT\": -0.00637, ...}`) and compute the",
+            "# result programmatically over that mapping (e.g. a dot-product with",
+            "# `functions.col`). Add a comment that these are run-specific model",
+            "# parameters and can later be replaced by a join to a coefficient table.",
+        ]
+        for s in ctx.substitutions:
+            lines.append(f"#   {s.macro_var} = {s.value}")
+    return lines
+
+
 def translation_prompt(
     step: SasStep,
     input_schemas: dict[str, Schema] | None = None,
@@ -98,6 +181,8 @@ def translation_prompt(
         "```sas",
         step.text,
         "```",
+        *_proc_sql_lines(step),
+        *_macro_context_lines(step),
         "",
         "# Input datasets (keys you will find in `inputs`):",
         *in_lines,
@@ -166,6 +251,10 @@ def judge_prompt(
             '{"equivalent": <bool>, "confidence": <0..1>, '
             '"issues": [<short strings>], "explanation": <short string>}',
             "Set equivalent=false if any SAS semantics (RETAIN, FIRST./LAST., merge "
-            "cardinality, join type, null handling, ordering) are not faithfully preserved.",
+            "cardinality, join type, null handling, ordering) are not faithfully preserved. "
+            "In particular, flag PROC SQL GROUP BY *remerging*: if the SAS SELECT mixes a "
+            "non-grouped column with an aggregate, SAS keeps all detail rows (window "
+            "semantics) — a PySpark groupBy/agg that collapses to one row per group is NOT "
+            "equivalent.",
         ]
     )
